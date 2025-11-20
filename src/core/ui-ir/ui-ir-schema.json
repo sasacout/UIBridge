@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UIBridgeUIIR",
+  "type": "object",
+  "required": ["version", "screenId", "widgets"],
+  "properties": {
+    "version": {"type": "string"},
+    "screenId": {"type": "string"},
+    "widgets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string"},
+          "tailwind": {"type": ["string", "null"]},
+          "children": {"type": "array", "items": {"type": "string"}},
+          "layout": {
+            "type": "object",
+            "properties": {
+              "x": {"type": "number"},
+              "y": {"type": "number"},
+              "w": {"type": "number"},
+              "h": {"type": "number"},
+              "display": {"type": "string"}
+            }
+          },
+            "style": {"type": "object"},
+            "events": {"type": "array", "items": {"type": "object"}},
+            "assets": {"type": "array", "items": {"type": "string"}},
+            "text": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "properties": {
+        "images": {"type": "array", "items": {"type": "string"}},
+        "fonts": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "meta": {"type": "object"}
+  }
+}

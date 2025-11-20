@@ -1,0 +1,16 @@
+{
+  "widgetMap": {
+    "lv_btn": { "react": "Button", "props": {"variant": "primary"} },
+    "lv_label": { "react": "Label" },
+    "Button": { "lvgl": "lv_btn" },
+    "Label": { "lvgl": "lv_label" }
+  },
+  "styleMap": {
+    "bgColor": { "tailwind": "bg-blue-500", "lvgl": "lv_style_set_bg_color" },
+    "radius": { "tailwind": "rounded-md", "lvgl": "lv_style_set_radius" }
+  },
+  "eventMap": {
+    "lv_event_clicked": { "react": "onClick" },
+    "onClick": { "lvgl": "lv_event_clicked" }
+  }
+}

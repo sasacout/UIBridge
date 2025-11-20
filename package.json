@@ -1,0 +1,52 @@
+{
+  "name": "uibridge",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate:ir": "node src/core/ui-ir/validator.js",
+    "gen:react": "node src/index.js react",
+    "gen:lvgl": "node src/index.js lvgl",
+    "parse:react": "node src/index.js parse-react src/sample/sample.jsx",
+    "parse:lvgl": "node src/index.js parse-lvgl src/sample/sample.c",
+    "parse:sketch": "node src/index.js parse-sketch src/sample/sketch-document.json",
+    "build:ir": "node src/index.js build-ir",
+    "phase1": "npm run validate:ir && npm run gen:react && npm run gen:lvgl",
+    "phase2": "npm run parse:react && npm run parse:lvgl && npm run build:ir",
+    "phase3": "npm run parse:react && npm run parse:lvgl && npm run parse:sketch && npm run build:ir",
+    "dev": "vite",
+    "test": "node scripts/test-phase2.js",
+    "test:phase3": "node scripts/test-phase3.js",
+    "lint": "eslint \"src/**/*.js\" --max-warnings=0",
+    "format": "prettier --write \"src/**/*.js\" \"scripts/**/*.js\"",
+    "coverage": "node scripts/coverage.js",
+    "build:react-preview": "node scripts/build-react-preview.js && vite build",
+    "preview:react": "vite preview",
+    "serve:api": "node server.js",
+    "serve:api:7000": "cross-env PORT=7000 node server.js",
+    "preview:dev": "vite",
+    "demo:full": "npm run validate:ir && npm run parse:react && npm run parse:lvgl && npm run build:ir && npm run gen:react && npm run gen:lvgl",
+    "preview:all": "concurrently \"npm:serve:api\" \"npm:preview:dev\"",
+    "start": "npm run preview:all"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.28.5",
+    "ajv": "^8.12.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@vitejs/plugin-react": "^4.1.0",
+    "autoprefixer": "^10.4.22",
+    "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
+    "eslint": "^8.56.0",
+    "postcss": "^8.5.6",
+    "prettier": "^3.3.3",
+    "tailwindcss": "^4.1.17",
+    "vite": "^5.4.21"
+  }
+}

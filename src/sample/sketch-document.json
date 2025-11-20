@@ -1,0 +1,7 @@
+{
+  "layers": [
+    { "type": "text", "name": "Title" },
+    { "type": "button", "text": "Confirm" },
+    { "type": "text", "text": "Description" }
+  ]
+}

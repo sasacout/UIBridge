@@ -1,0 +1,286 @@
+# 🧩 UIBridge
+**기능 명세서 (Functional Specification)**
+
+---
+
+## 1. 개요
+LVGL 기반 C 코드 또는 React(JSX) 코드를 입력받아 상호 변환하고, Sketch 파일 및 에셋 정보를 반영하여 Tailwind 스타일의 React 컴포넌트를 자동 생성한다.
+변환된 결과는 Storybook 유사 인터페이스로 미리보기 가능하다.
+
+---
+
+## 2. 주요 기능
+
+### 2.1 입력 관리
+- **입력 경로 설정**
+  - LVGL 프로젝트 루트 경로(`<ROOT>`) 입력.
+  - 선택적으로 Sketch 파일 경로, 스크린샷 폴더 경로 입력 가능.
+
+- **자동 경로 인식 규칙**
+  - 스크린 코드: `<ROOT>\gui\generated\screen_*.c`
+  - 템플릿/배경 코드: `<ROOT>\gui\generated\lv_*.c`
+  - 스크린샷: `<ROOT>\captures\screen_*.png` (기본)
+    - 커스텀 경로 Override 예: `D:\source\LUPA\2026\screentshot\screen_*.png` (환경 설정이나 입력 UI에서 명시)
+    - 권장 폴더명은 `screenshot` (오타 `screentshot` 사용 시 그대로 처리 가능하나 통일성 위해 수정 권장)
+  - 이미지 에셋: `<ROOT>\ui\images\**`
+    - 예시 실제 경로: `D:\source\LUPA\2026\CommonUI_24inch_v1.0\ui\images\**`
+    - 탐지 실패 점검: 폴더명(images) 정확성, 확장자(.png/.jpg/.jpeg/.bmp/.svg), 숨김 파일 여부, 대용량 파일(>5MB) 제외 로직 여부.
+  - 이미지 시퀀스: `<ROOT>\ui\image_sequences\**`
+    - 예시 실제 경로: `D:\source\LUPA\2026\CommonUI_24inch_v1.0\ui\image_sequences\**`
+    - 프레임 명명 규칙: `name_0001.png`, `name_0002.png` … (고정 너비 패딩 권장)
+    - 묶음 처리: 동일 접두사 + 연속 인덱스 → FrameSet(첫/마지막 프레임, 프레임 수, FPS 기본값)
+    - 탐지 실패 점검: 인덱스 패딩 불일치(`1` vs `0001`), 누락 프레임, 혼합 확장자, 과도한 프레임(>200) 제한, 오타(`image_sequence` vs `image_sequences`).
+  - 폰트 에셋: `<ROOT>\ui\fonts\**`
+  - CSV 데이터: `<ROOT>\ui\data\*.csv`
+  - 디스플레이 설정: `<ROOT>\ui\conf.json`
+  - 예시 실제 경로: `D:\source\LUPA\2026\CommonUI_24inch_v1.0\ui\data\*.csv`
+  - 탐지 실패 시 점검: ROOT 정확성, 확장자(.csv), 숨김 파일 여부, 인코딩(BOM) 문제.
+
+- **Override 지원**
+  - conf.json 파싱 실패 시 사용자 입력(width, height 등)으로 대체.
+
+---
+
+### 2.2 코드 파싱 및 변환
+
+#### 2.2.1 LVGL → React 변환
+- LVGL C 코드 파싱
+  - `lv_obj_create`, `lv_label_set_text`, `lv_img_set_src` 등 위젯 생성 및 속성 호출 분석.
+  - 위젯 계층 구조(Tree) 생성.
+
+- React 변환
+  - 각 LVGL 위젯을 대응되는 React 컴포넌트(JSX)로 매핑.
+  - Tailwind CSS 클래스 적용.
+  - LVGL 이벤트(`lv_event_cb`) → React 이벤트(`onClick`, `onChange` 등) 변환.
+  - 이미지/폰트 경로를 `import` 가능한 상대 경로(`/src/assets/...`)로 재작성.
+  - CSV 파일을 JSON으로 변환하여 리스트형 컴포넌트의 `items` props로 전달.
+
+- 코드 상단 주석 예시
+  ```js
+  /**
+   * Auto-generated from LVGL screen_main.c
+   * LVGL Widget Mapping: lv_btn -> <Button>, lv_label -> <Label>
+   */
+  ```
+
+#### 2.2.2 React → LVGL 변환
+
+##### JSX 파싱
+- **React 컴포넌트 트리 분석**
+  - JSX 구조를 파싱하여 컴포넌트 계층(Tree)을 구성하고, 각 노드의 속성 및 이벤트를 추출한다.
+- **Tailwind 클래스 → LVGL 스타일 속성으로 매핑**
+  - Tailwind CSS 클래스명을 LVGL 스타일 속성(`lv_style_set_*`)으로 변환한다.
+
+##### LVGL 코드 생성
+- **위젯 생성 코드 자동 생성**
+  - `lv_obj_create`, `lv_label_create` 등 LVGL 위젯 생성 함수를 자동으로 생성한다.
+- **이벤트 변환**
+  - React 이벤트(`onClick`, `onChange` 등)를 LVGL 이벤트 콜백(`lv_event_cb_t`)으로 변환한다.
+- **에셋 경로 재작성**
+  - React의 `import` 경로를 LVGL 리소스 경로(`ui/images/...`)로 변환한다.
+
+---
+
+### 2.3 Sketch 파일 연동
+
+##### Sketch 파일 파싱
+- **디자인 정보 추출**
+  - 색상, 폰트, 레이아웃, 컴포넌트 구조를 Sketch 파일에서 파싱한다.
+- **UI IR 반영**
+  - 추출된 정보를 중간 표현(UI IR)에 반영하여 코드 변환 시 활용한다.
+
+##### 활용 방식
+- **스타일 및 레이아웃 보정**
+  - Sketch 정보는 LVGL ↔ React 변환 시 스타일 및 레이아웃을 자동 보정하는 데 사용된다.
+
+---
+
+### 2.4 Storybook 유사 미리보기
+
+##### 좌측 패널
+- **스크린 목록 자동 생성**
+  - `screen_*.c` 또는 `screen_*.jsx` 파일을 기준으로 스크린 목록을 자동 생성한다.
+
+##### 우측 패널
+- **렌더링 결과 표시**
+  - 선택된 스크린의 렌더링 결과를 표시한다.
+  - LVGL → React 변환 결과는 iframe 기반 React 렌더링으로 표시한다.
+  - React → LVGL 변환 결과는 시뮬레이터 캡처 또는 스크린샷으로 표시한다.
+
+##### 상태 표시
+- **변환 상태 및 로그 표시**
+  - 변환 성공/실패 로그, 경고 메시지, 매핑 통계 등을 시각적으로 표시한다.
+
+---
+
+### 2.5 템플릿 및 재사용 컴포넌트
+
+##### LVGL 템플릿 변환
+- **템플릿 코드 변환**
+  - LVGL의 `lv_*.c` 파일은 React의 `src/components/templates` 디렉터리로 변환된다.
+
+##### 공통 구조 관리
+- **공통 컴포넌트 자동화**
+  - 공통 배경, 헤더, 푸터 등은 자동으로 import되어 재사용 가능한 구조로 생성된다.
+
+---
+
+### 2.6 코드 다운로드 (Storybook 뷰어 확장)
+
+##### 목적
+- 각 스크린(또는 리스트 항목)에 대응되는 변환된 React 코드 / 역변환 LVGL 코드 / 관련 에셋을 손쉽게 추출.
+
+##### UI 동작
+- 좌측 스크린 목록 항목 Hover 시: 작은 "</>" 아이콘 노출.
+- 상세 뷰(우측 패널) 상단 Toolbar: [Download React], [Download LVGL], [Download Assets], [Download All] 버튼.
+
+##### 패키징 규칙
+- React: 단일 스크린 컴포넌트(.tsx/.jsx) + 필요한 서브컴포넌트 + 상대 import 정규화.
+- LVGL: 해당 스크린을 재구성하는 최소 C 소스(screen_x.c) + 필요한 스타일/템플릿 헤더.
+- Assets: 사용된 이미지/폰트만 필터링하여 zip.
+- All: 위 3종 + metadata.json(UI IR 스냅샷, 생성 시각, 매핑 통계).
+
+##### 백엔드 구현 흐름
+1. 현재 선택 스크린 ID -> UI IR 서브트리 추출.
+2. React 코드 생성 캐시 확인 (없으면 새로 생성).
+3. LVGL 역변환 캐시 확인.
+4. 사용 에셋 목록(이미지, 폰트) 추출 -> 파일 시스템에서 수집.
+5. 임시 작업 디렉터리 구성 -> 파일 배치.
+6. metadata.json 작성: {
+  "screen": "screen_main",
+  "widgets": <count>,
+  "events": <count>,
+  "assets": ["/ui/images/a.png", ...],
+  "generatedAt": ISO8601,
+  "versions": {"uiBridge": "x.y.z"}
+}
+7. Zip 스트림 생성 -> 프론트엔드에 파일 다운로드 응답.
+
+##### API 제안
+- GET /export/react/:screenId
+- GET /export/lvgl/:screenId
+- GET /export/assets/:screenId
+- GET /export/all/:screenId
+
+##### 캐싱 전략
+- 첫 변환 결과를 in-memory + disk(.cache/exports/<screenId>/<type>.zip) 보존.
+- UI IR 해시(md5) 변경 시 캐시 무효화.
+
+##### 에러 처리
+- 404: screenId 미존재 / 파싱 실패.
+- 409: 변환 중(진행 상태) -> 재시도 지시.
+- 500: 압축 실패 -> 로그 ID 반환.
+
+##### 확장 포인트
+- 향후: "Download Diff" (이전 변환 대비 변경된 부분만), "Download Type Definitions", "Git Patch 생성" 기능 추가 가능.
+
+##### 보안/무결성
+- Zip 내 실행 가능 바이너리 제외(이미지/폰트/텍스트만 허용).
+- 파일명 sanitize (경로 traversal 차단).
+
+---
+
+### 2.7 Sketch 단독 기반 코드 생성
+
+##### 개요
+- 기존에는 LVGL C 또는 React(JSX) 코드가 입력으로 필요했지만, 순수 Sketch 디자인 파일만 있어도 UI IR을 구성하여 초기 React/LVGL 코드 뼈대를 자동 생성 가능.
+
+##### 처리 단계
+1. Sketch 파일 파싱: 페이지(Page) -> 아트보드(Artboard) -> 레이어(Layer) 트리 수집.
+2. 레이어 분류/정규화: 그룹/심볼/텍스트/비트맵/Shape -> 추상 위젯(Button, Image, Text, Container 등) 매핑.
+3. 레이아웃 추론: 각 레이어의 frame(x,y,width,height)과 부모 관계로 flex/grid 여부 및 상대 패딩 계산.
+4. 스타일 추출: 색상, 폰트 패밀리, 폰트 크기, weight, border, radius, opacity 등 -> Tailwind 클래스 / LVGL style API로 변환.
+5. 에셋 처리: 비트맵/이미지 slice 내보내기 -> /assets/images, 폰트는 매칭 테이블 혹은 사용자 제공 폰트 매핑.
+6. UI IR 생성: {widgets:[{id,type,children,layout,style,assets,text,eventPlaceholders}...]}
+7. 코드 생성:
+  - React: 컴포넌트 트리 + placeholder event handlers + Tailwind 클래스.
+  - LVGL: 객체 생성 순서(부모 먼저), 위치/사이즈 설정(lv_obj_set_pos/size), 스타일(lv_style_set_*), 텍스트/이미지 적용.
+8. 후처리: 심볼(Design System) -> 재사용 컴포넌트 폴더 분리, 중복 스타일 -> 공통 CSS/스타일 preset.
+
+##### 휴리스틱 예시
+- 텍스트 레이어 주변 사각형 Shape 결합 -> Button 추론.
+- 동일 높이/균일 간격 정렬된 텍스트 배열 -> List / Menu 추론.
+- 동일한 Symbol Instance 반복 -> 재사용 컴포넌트 추출.
+
+##### 한계 & 보완
+- 정적 디자인이므로 동적 상태/이벤트(onClick 등)는 자동 추출 불가 -> placeholder 삽입.
+- 복잡한 애니메이션/조건부 렌더링 미지원 -> 수동 편집 필요.
+- 폰트 라이선스/포맷은 사용자가 제공해야 정확한 LVGL 폰트 생성 가능.
+
+##### 사용자 입력(선택)
+- 디스플레이 해상도 Override.
+- 기본 상호작용 패턴(Button 클릭 -> emit 'onAction').
+- 리스트 추론 임계값(정렬 허용 오차 px).
+
+##### API 제안
+- POST /import/sketch (file upload) -> jobId 반환.
+- GET /import/sketch/:jobId/status -> 진행률.
+- GET /import/sketch/:jobId/code/react
+- GET /import/sketch/:jobId/code/lvgl
+- GET /import/sketch/:jobId/assets
+
+##### 캐시
+- Sketch 파일 SHA256 기준 IR 캐시. 동일 파일 재업로드 시 즉시 재사용.
+
+##### 향후 확장
+- Sketch 심볼 -> Design Tokens JSON 출력.
+- Auto Layout 정보 -> React flex/grid 정확도 향상.
+- 접근성 속성(alt, aria-label) 자동 제안.
+
+---
+
+### 3. 기술 스택
+
+| **영역** | **기술** |
+|-----------|-----------|
+| **프론트엔드** | React, Tailwind CSS, Electron (또는 Next.js) |
+| **백엔드** | Node.js + Python (파서 및 변환 엔진) |
+| **파서(Parser)** | ANTLR / Tree-sitter (C, JSX 파싱) |
+| **중간 표현(UI IR)** | JSON 기반 UI IR (위젯, 속성, 이벤트, 스타일 구조화) |
+| **미리보기(Viewer)** | iframe 기반 Storybook-like Viewer |
+| **LVGL 시뮬레이션** | Emscripten 기반 WebAssembly (선택) |
+
+---
+
+### 4. 개발 단계 (Roadmap)
+
+| 단계 | 목표 | 핵심 산출물 | 완료 기준 |
+|------|------|-------------|-----------|
+| 0. 초기 환경 | 리포지토리/빌드/CI/코드 스타일/디렉터리 구조 확립 | 기본 폴더 구조, ESLint/Prettier, Python env, 초기 `ARCHITECTURE.md` | CI 통과, lint/format 스크립트 동작 |
+| 1. UI IR 기초 | 최소 Widget/Style/Layout 스키마 정의 및 검증 | `ui-ir-schema.json`, IR Validator 모듈 | 샘플 LVGL/React/Sketch에서 기본 IR 추출 성공 |
+| 2. 파서 구현 | LVGL, React, Sketch 파서 MVP | `parsers/` 모듈, AST → Raw Nodes | 3종 입력 각각 위젯/레이아웃 70% 이상 식별 |
+| 3. Normalizer & Mapping | Raw Nodes → 표준 IR + 기본 매핑 룰 | Normalizer, `mapping-rules.json` | 동일 화면 양방향 변환 시 구조 손실 없음 |
+| 4. 코드 생성기 | React/LVGL Generator 베타 | `generators/react`, `generators/lvgl` | 생성 코드 빌드/컴파일 가능 (React/ C) |
+| 5. Preview & Storybook-like | 스크린 목록/렌더/상태 로그 | Preview 서비스, 변환 상태 패널 | 변환 후 2초 내 렌더, 로그 표출 |
+| 6. 다운로드/Export | 개별/배치 Zip 추출 | Export API, metadata.json | 4종(React/LVGL/Assets/All) 다운로드 성공 |
+| 7. Sketch 단독 생성 | Sketch→IR→코드 Scaffold | Sketch 추론 휴리스틱, 빈 이벤트 placeholder | 최소 3개 아트보드 React/LVGL 자동 생성 |
+| 8. 캐싱/성능 | IR/코드/Zip 캐시 + Incremental 파싱 | Cache Layer, Diff 파서 | 재변환 시간 50% 이상 단축 |
+| 9. 품질/테스트 | 단위/통합/회귀 테스트 확대 | Jest/pytest 스위트, 스냅샷 테스트 | 커버리지 목표(>70%) 달성 |
+| 10. 플러그인/확장 | 위젯/스타일 룰 핫로드 | Plugin API | 신규 룰 추가 후 재시작 없이 적용 |
+| 11. 운영/배포 | 패키징(Electron/CLI), 버전 관리 | Release 파이프라인, 버전 태그 | 릴리즈 아티팩트 생성 및 설치 테스트 |
+
+#### 단계별 주요 작업 상세
+- 단계 1: JSON Schema 정의, IR Validator, 기본 예외 코드(N001 등) 추가.
+- 단계 2: Tree-sitter 설정, AST → Raw Node 추출 유틸, 에러 코드(P001~P002).
+- 단계 3: Normalizer 규칙(기본 값, 스타일 병합), 매핑 룰 DSL 초안.
+- 단계 4: 템플릿 엔진(Handlebars/ES Module), 이벤트 stub 삽입.
+- 단계 5: iframe React build(ESBuild/Vite), LVGL WASM(옵션) 초기 통합.
+- 단계 6: Zip Packager(stream), metadata 통계 수집.
+- 단계 7: Sketch 레이어→위젯 휴리스틱, 심볼→컴포넌트 추출, 중복 스타일 압축.
+- 단계 8: 파일 해시 기반 변경 감지, 부분 파싱 범위 제한, LRU 캐시.
+- 단계 9: 테스트 유형: 파서 스냅샷, IR Validation, 매핑, 코드 출력, 프리뷰 렌더, Export.
+- 단계 10: Plugin 로더(동적 import), 룰 병합 우선순위.
+- 단계 11: Electron 패키징 또는 CLI 배포, 업데이트 체크.
+
+#### 추적/관리 권장 지표
+- 평균 변환 시간(ms), 캐시 히트율, 파서 실패율, 위젯 매핑 커버리지(%), 생성 코드 라인 수 대비 경고 수.
+
+#### 위험 및 완화
+- 복잡한 AST 처리 성능: Incremental + 병렬 파싱.
+- Sketch 다양성: 휴리스틱 실패시 사용자 수정 도구(레이어 타입 매뉴얼 재지정 UI) 계획.
+- 스타일 충돌: 우선순위 체계(Sketch > 원본 코드 > 기본 매핑) 명확화.
+
+#### 향후 (선택적)
+- Diff 기반 Export, 접근성 자동 태깅, 다국어(i18n) 텍스트 키 추출, 추가 플랫폼(Flutter/Figma) 지원.
+
+---
