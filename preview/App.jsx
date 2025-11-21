@@ -1,11 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import { irToJsx } from '../src/core/ui-ir/irToJsx';
 import { Renderer } from './Renderer';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:7000';
 
 export default function App() {
+  // 중복 선언 제거, 위에서 이미 선언된 useState만 남김
+
   const [paths, setPaths] = useState({ lvglRoot: '', reactRoot: '', sketchFile: '', screenshotFolder: '' });
   const [screens, setScreens] = useState({ lvglScreens: [], reactScreens: [] });
   const [selected, setSelected] = useState('');
@@ -13,9 +17,25 @@ export default function App() {
   const [convertResult, setConvertResult] = useState(null);
   const [logs, setLogs] = useState([]);
   const [coverage, setCoverage] = useState(null);
-    const [previewTab, setPreviewTab] = useState('preview'); // 'preview' | 'ir' | 'jsx'
+  const [previewTab, setPreviewTab] = useState('preview'); // 'preview' | 'ir' | 'jsx'
+
+  const handleShareCode = useCallback(async () => {
+    if (!ir) {
+      alert('스크린을 먼저 선택하세요.');
+      return;
+    }
+    const zip = new JSZip();
+    const code = irToJsx(ir, selected || 'ScreenMain');
+    const fileName = `${selected || 'ScreenMain'}.jsx`;
+    zip.file(fileName, code);
+    const blob = await zip.generateAsync({ type: 'blob' });
+    saveAs(blob, `${selected || 'ScreenMain'}_react_code.zip`);
+  }, [ir, selected]);
 
   function log(msg) { setLogs(l => [msg, ...l.slice(0, 49)]); }
+
+  // ir가 null 또는 undefined일 때 안전하게 처리
+  const safeIr = ir || null;
 
   // 핸들러 함수 더미 정의
     // 핸들러 함수 실제 구현
@@ -130,19 +150,23 @@ export default function App() {
           <button onClick={() => setPreviewTab('preview')} style={{ fontWeight: previewTab==='preview'?'bold':'normal' }}>미리보기</button>
           <button onClick={() => setPreviewTab('ir')} style={{ fontWeight: previewTab==='ir'?'bold':'normal' }}>IR Data</button>
           <button onClick={() => setPreviewTab('jsx')} style={{ fontWeight: previewTab==='jsx'?'bold':'normal' }}>React Code</button>
+          <button onClick={handleShareCode} style={{ fontWeight: 'normal', background: '#eee', border: '1px solid #ccc', borderRadius: 4, padding: '4px 10px' }}>Share</button>
         </div>
           <div style={{ border: '1px solid #ddd', padding: 16, marginTop: 0, minHeight: 220, background: previewTab==='preview' ? '#000' : '#fff' }}>
             {previewTab === 'preview' && (
               <div style={{ width: '100%', minHeight: 220, background: '#fff', display: 'block' }}>
-                {(() => { console.log('미리보기에 전달되는 IR:', ir); return null; })()}
-                <Renderer ir={ir} />
+                {(() => { console.log('미리보기에 전달되는 IR:', safeIr); return null; })()}
+                {safeIr
+                  ? <Renderer ir={safeIr} />
+                  : <div style={{color:'red'}}>스크린을 선택하세요.</div>
+                }
               </div>
             )}
             {previewTab === 'ir' && (
-              <pre style={{ fontSize: 13, color: '#222', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{ir ? JSON.stringify(ir, null, 2) : '[IR 없음]'}</pre>
+              <pre style={{ fontSize: 13, color: '#222', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{safeIr ? JSON.stringify(safeIr, null, 2) : '[IR 없음]'}</pre>
             )}
             {previewTab === 'jsx' && (
-              <pre style={{ fontSize: 13, color: '#222', background: '#f8f8f8', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{ir ? irToJsx(ir, selected || 'ScreenMain') : '[React 코드 없음]'}</pre>
+              <pre style={{ fontSize: 13, color: '#222', background: '#f8f8f8', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{safeIr ? irToJsx(safeIr, selected || 'ScreenMain') : '[React 코드 없음]'}</pre>
             )}
           </div>
       </div>

@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "screenId": "screen_main",
+  "widgets": [
+    {
+      "id": "btn_login",
+      "type": "Button",
+      "children": ["lbl_login"],
+      "layout": { "x": 40, "y": 120, "w": 160, "h": 48, "display": "flex" },
+      "style": { "bgColor": "#1E90FF", "radius": 8 },
+      "events": [{"name": "onClick", "source": "lv_event_clicked"}],
+      "assets": [],
+      "text": "Login"
+    },
+    {
+      "id": "lbl_login",
+      "type": "Label",
+      "layout": { "x": 60, "y": 130, "w": 120, "h": 24 },
+      "style": { "color": "#333333", "fontSize": 16 },
+      "text": "Please log in"
+    }
+  ],
+  "assets": { "images": ["/ui/images/logo.png"], "fonts": ["/ui/fonts/Pretendard.ttf"] },
+  "meta": { "generatedAt": "2025-11-17T10:00:00Z" }
+}

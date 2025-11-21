@@ -1,6 +1,6 @@
 module.exports = {
   content: [
-    './preview/**/*.{js,jsx,ts,tsx}',
+    './preview/**/*.{js,jsx,ts,tsx,html}',
     './src/**/*.{js,jsx,ts,tsx}',
     './index.html'
   ],
@@ -11,10 +11,9 @@ module.exports = {
     { pattern: /h-\[.*px\]/ },
     { pattern: /bg-\[.*\]/ },
     { pattern: /border-\[.*px\]/ },
-    { pattern: /border-\[.*\]/ },
     { pattern: /rounded-\[.*px\]/ },
-    { pattern: /font-\[.*\]/ },
-    { pattern: /text-\[.*\]/ },
-    { pattern: /opacity-\[.*\]/ }
-  ]
+    { pattern: /text-\[.*\]/ }
+  ],
+  theme: { extend: {} },
+  plugins: []
 }
