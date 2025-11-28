@@ -1,18 +1,15 @@
 import React from "react";
 function getTailwindStyle(widget) {
+  // 기본값: 디자인에 맞는 Tailwind
   let style = '';
-  // 기본 타입별 스타일
-  if (widget.type === 'Container') style += 'flex flex-col items-center justify-center w-full h-full ';
-  if (widget.type === 'Button') style += 'bg-gray-700 text-white rounded-full px-6 py-2 font-medium text-base mr-4 mb-2 ';
-  if (widget.type === 'Label') style += 'text-center text-white text-lg mb-4 ';
-  if (widget.type === 'Image') style += 'w-12 h-12 rounded-full border-2 border-white mb-4 flex items-center justify-center ';
-  // LVGL style/layout 정보 추가 변환
-  if (widget.layout) {
-    if (typeof widget.layout.x === 'number') style += `left-[${widget.layout.x}px] `;
-    if (typeof widget.layout.y === 'number') style += `top-[${widget.layout.y}px] `;
-    if (typeof widget.layout.w === 'number') style += `w-[${widget.layout.w}px] `;
-    if (typeof widget.layout.h === 'number') style += `h-[${widget.layout.h}px] `;
-  }
+  // isRoot일 때 하드코딩된 flex/w/h/bg-black/overflow-hidden 제거 (IR 기반으로만)
+  // Container에 flex/flex-col/items-center 자동 추가 제거 (IR/tailwind/style만 반영)
+  // Button, Image에 하드코딩된 클래스도 제거 (IR/tailwind/style만 반영)
+
+  // IR 데이터의 tailwind 필드가 있으면 추가(확장)
+  if (widget.tailwind) style += widget.tailwind + ' ';
+
+  // IR 데이터의 style/layout 필드가 있으면 일부 속성만 Tailwind로 변환하여 추가
   if (widget.style) {
     if (widget.style.bgColor) {
       const hex = widget.style.bgColor.replace('0x', '#');
@@ -44,15 +41,15 @@ function getTailwindStyle(widget) {
     if (widget.style.opacity) {
       style += `opacity-[${widget.style.opacity}] `;
     }
-    // 기타 스타일 속성도 필요시 추가 가능
   }
-  // 위치/크기 속성이 있으면 absolute 추가 (최상위 컨테이너 제외)
-  if ((/left-\[.*px\]|top-\[.*px\]|right-\[.*px\]|bottom-\[.*px\]|w-\[.*px\]|h-\[.*px\]/.test(style)) && widget.type !== 'Container') {
-    style = 'absolute ' + style;
-  }
-  // 최상위 컨테이너는 relative로 지정
-  if (widget.type === 'Container' && widget.isRoot) {
-    style = 'relative ' + style;
+  // layout 정보: w/h/x/y 모두 적용
+  if (widget.layout) {
+    if (typeof widget.layout.x === 'number') style += `left-[${widget.layout.x}px] `;
+    if (typeof widget.layout.y === 'number') style += `top-[${widget.layout.y}px] `;
+    if (typeof widget.layout.w === 'number') style += `w-[${widget.layout.w}px] `;
+    if (typeof widget.layout.h === 'number') style += `h-[${widget.layout.h}px] `;
+    // left/top이 있으면 absolute도 추가
+    if (typeof widget.layout.x === 'number' || typeof widget.layout.y === 'number') style += 'absolute ';
   }
   return style.trim();
 }
@@ -64,6 +61,7 @@ function getWidgetById(widgets, id) {
 
 // 재귀적으로 위젯 렌더링
 function renderWidget(widget, widgets) {
+  console.log('renderWidget:', widget.id);
   // 최상위 컨테이너 여부 전달
   const isRoot = widget.id === widgets[0].id;
   const style = getTailwindStyle({ ...widget, isRoot });
@@ -72,17 +70,11 @@ function renderWidget(widget, widgets) {
     className: style
   };
   if (widget.type === 'Container') {
-    // 버튼 그룹을 flex로 묶기 (자식 중 Button이 2개 이상이면)
-    const buttonChildren = widget.children?.map(cid => getWidgetById(widgets, cid)).filter(w => w?.type === 'Button') || [];
-    const otherChildren = widget.children?.map(cid => getWidgetById(widgets, cid)).filter(w => w?.type !== 'Button') || [];
+    // 버튼 그룹 flex 묶기 로직도 하드코딩 대신 IR에서 제어하도록 변경 (예: tailwind/layout에 flex-row 등 지정)
+    const children = widget.children?.map(cid => getWidgetById(widgets, cid)).filter(Boolean) || [];
     return (
       <div {...commonProps}>
-        {otherChildren.map(child => child ? renderWidget(child, widgets) : null)}
-        {buttonChildren.length > 0 && (
-          <div className="flex flex-row justify-center items-center mt-2">
-            {buttonChildren.map(child => child ? renderWidget(child, widgets) : null)}
-          </div>
-        )}
+        {children.map(child => renderWidget(child, widgets))}
       </div>
     );
   }
@@ -91,7 +83,36 @@ function renderWidget(widget, widgets) {
     return <img {...commonProps} src={widget.src || 'https://via.placeholder.com/48x48?text=No+Img'} alt="icon" />;
   }
   if (widget.type === 'Label') {
-    return <span {...commonProps}>{widget.text}</span>;
+    // style: layout(w/h/x/y) + style(color/font 등) 모두 px 단위로, 주요 속성은 항상 명확히 style에 넣음
+    const style = {};
+    style.whiteSpace = 'pre-line';
+    if (typeof widget.layout?.x === 'number') {
+      style.left = widget.layout.x + 'px';
+      style.position = 'absolute';
+    }
+    if (typeof widget.layout?.y === 'number') {
+      style.top = widget.layout.y + 'px';
+      style.position = 'absolute';
+    }
+    if (typeof widget.layout?.w === 'number') style.width = widget.layout.w + 'px';
+    if (typeof widget.layout?.h === 'number') style.height = widget.layout.h + 'px';
+    if (widget.style?.color) style.color = widget.style.color.split(' ')[0];
+    if (widget.style?.fontSize) style.fontSize = (typeof widget.style.fontSize === 'number' ? widget.style.fontSize + 'px' : widget.style.fontSize);
+    if (widget.style?.font) style.fontFamily = widget.style.font;
+    if (widget.style?.textAlign) style.textAlign = widget.style.textAlign;
+    // 기타 style 속성도 병합 (이미 위에서 명확히 지정한 속성은 덮어쓰지 않음)
+    if (widget.style) {
+      for (const [k, v] of Object.entries(widget.style)) {
+        if (!(k in style)) style[k] = v;
+      }
+    }
+    console.log('Label widget:', widget);
+    console.log('Computed style:', style);
+    return (
+      <p {...commonProps} style={style}>
+        {widget.text}
+      </p>
+    );
   }
   if (widget.type === 'Button') {
     return <button {...commonProps}>{widget.text}</button>;
@@ -107,17 +128,17 @@ export function Renderer({ ir }) {
   if (!ir || !ir.widgets || typeof ir.widgets.length !== 'number' || ir.widgets.length === 0) {
     return <div style={{color:'red'}}>IR 데이터 없음 (widgets 배열 length 확인 필요)</div>;
   }
-  // 루트 컨테이너 찾기: id가 screenId로 시작하는 가장 상위 컨테이너
-  const rootCandidates = ir.widgets.filter(w => w.type === 'Container' && w.id.startsWith(ir.screenId));
-  // 자식이 가장 많은 컨테이너를 루트로 선택
-  const root = rootCandidates.sort((a, b) => (b.children?.length || 0) - (a.children?.length || 0))[0];
-  if (!root) {
-    return <div style={{color:'red'}}>루트 컨테이너 없음<br/>rootCandidates: {JSON.stringify(rootCandidates, null, 2)}</div>;
-  }
+  // 모든 부모 없는 Container(모든 트리의 루트)를 렌더링 (irToJsx.js와 동일하게)
+  const allIds = new Set(ir.widgets.map(w => w.id));
+  const childIds = new Set(ir.widgets.flatMap(w => w.children || []));
+  const rootContainers = ir.widgets.filter(w => w.type === 'Container' && !childIds.has(w.id));
+  const roots = rootContainers.length > 0 ? rootContainers : ir.widgets.filter(w => w.type === 'Container');
   // Preview 영역 배경을 어둡게 변경
   return (
     <div style={{position: 'relative', width: 320, height: 240, background: '#222', overflow: 'hidden'}}>
-      {renderWidget(root, ir.widgets)}
+      {roots.map(root => renderWidget(root, ir.widgets))}
     </div>
   );
 }
+
+export default Renderer;
